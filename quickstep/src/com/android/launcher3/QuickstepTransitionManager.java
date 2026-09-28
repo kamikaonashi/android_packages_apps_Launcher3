@@ -43,7 +43,6 @@ import static com.android.launcher3.BaseActivity.INVISIBLE_ALL;
 import static com.android.launcher3.BaseActivity.INVISIBLE_BY_APP_TRANSITIONS;
 import static com.android.launcher3.BaseActivity.INVISIBLE_BY_PENDING_FLAGS;
 import static com.android.launcher3.BaseActivity.PENDING_INVISIBLE_BY_WALLPAPER_ANIMATION;
-import static com.android.launcher3.Flags.appLaunchBlur;
 import static com.android.launcher3.LauncherAnimUtils.SCALE_PROPERTY;
 import static com.android.launcher3.LauncherAnimUtils.getScaleProperty;
 import static com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APPWIDGET;
@@ -317,6 +316,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
         mClosingFreeformWindowTransY =
                 res.getDimensionPixelSize(R.dimen.closing_freeform_window_trans_y);
         mMaxShadowRadius = res.getDimensionPixelSize(R.dimen.max_shadow_radius);
+        mIsAppLaunchBlurEnabled = res.getBoolean(R.bool.config_enableAppLaunchBlur);
 
         mLauncher.addOnDeviceProfileChangeListener(this);
         mSystemUiProxy = SystemUiProxy.INSTANCE.get(mLauncher);
@@ -345,7 +345,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
                                 new ScalingWorkspaceRevealAnim(
                                         mLauncher, null /* siblingAnimation */,
                                         null /* windowTargetRect */, true /* playAlphaReveal */,
-                                        true /* playBlur */);
+                                        mIsAppLaunchBlurEnabled /* playBlur */);
                         mFallbackRevealAnimation.getAnimators().addListener(
                                 new AnimatorListenerAdapter() {
                                     @Override
@@ -368,8 +368,6 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
 
         mMaxBlurRadius = res.getDimensionPixelSize(
                 R.dimen.max_depth_blur_radius_enhanced);
-        mIsAppLaunchBlurEnabled = appLaunchBlur() && res.getBoolean(
-                com.android.internal.R.bool.config_enableAppLaunchBlur);
     }
 
     @Override
@@ -1155,7 +1153,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
 
         // If app targets are translucent, do not animate the background as it causes a visible
         // flicker when it resets itself at the end of its animation.
-        if (appTargetsAreTranslucent || !launcherClosing) {
+        if (appTargetsAreTranslucent || !launcherClosing || !mIsAppLaunchBlurEnabled) {
             animatorSet.play(appAnimator);
         } else {
             animatorSet.playTogether(appAnimator, getBackgroundAnimator());
@@ -1309,7 +1307,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
 
         // If app targets are translucent, do not animate the background as it causes a visible
         // flicker when it resets itself at the end of its animation.
-        if (appTargetsAreTranslucent || !launcherClosing) {
+        if (appTargetsAreTranslucent || !launcherClosing || !mIsAppLaunchBlurEnabled) {
             animatorSet.play(appAnimator);
         } else {
             animatorSet.playTogether(appAnimator, getBackgroundAnimator());
@@ -1375,7 +1373,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
 
     /** Returns animator that controls depth/blur of the background during app/widget opening. */
     private Animator getBackgroundAnimator() {
-        if (!Flags.allAppsSurface()) {
+        if (!mIsAppLaunchBlurEnabled || !Flags.allAppsSurface()) {
             // Don't animate/blur the background for this launch, regardless of the launcher state.
             // We have too many performance issues with the blur.
             return new AnimatorSet();
@@ -2057,7 +2055,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
                         new ScalingWorkspaceRevealAnim(mLauncher, rectFSpringAnim,
                                 rectFSpringAnim.getTargetRect(),
                                 !fromPredictiveBack /* playAlphaReveal */,
-                                true /* playBlur */).getAnimators());
+                                mIsAppLaunchBlurEnabled /* playBlur */).getAnimators());
 
                 // We play StaggeredWorkspaceAnim as a part of the closing window animation.
                 playWorkspaceReveal = false;
