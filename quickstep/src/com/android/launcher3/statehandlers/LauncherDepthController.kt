@@ -31,6 +31,8 @@ class LauncherDepthController(
     blurState: ListenableRef<Boolean>,
 ) : DepthController<LauncherState, QuickstepLauncher>(launcher, blurState) {
 
+    private var lastAppliedBlur = 0f
+
     override fun shouldBlur(): Boolean {
         return super.shouldBlur() && !Flags.allAppsSurface()
     }
@@ -53,11 +55,23 @@ class LauncherDepthController(
         val shouldBlurWorkspace =
             stateManager.currentStableState.shouldBlurWorkspace(launcher, targetState)
 
+        // setRenderEffect() invalidates the view, which re-records the whole workspace and hotseat
+        // and re-runs the blur. Doing that with a new radius on every animation frame is what made
+        // the drawer janky, so only change the effect when the quantized radius changes.
+        val quantizedBlur =
+            if (shouldBlurWorkspace && mCurrentBlur > 0) {
+                val step = launcher.resources.displayMetrics.density * BLUR_STEP_DP
+                maxOf(1, Math.round(mCurrentBlur / step)) * step
+            } else 0f
+        if (quantizedBlur == lastAppliedBlur) {
+            return shouldBlurWorkspace
+        }
+        lastAppliedBlur = quantizedBlur
         val blurEffect =
-            if (shouldBlurWorkspace && mCurrentBlur > 0)
+            if (quantizedBlur > 0f)
                 RenderEffect.createBlurEffect(
-                    mCurrentBlur.toFloat(),
-                    mCurrentBlur.toFloat(),
+                    quantizedBlur,
+                    quantizedBlur,
                     Shader.TileMode.DECAL,
                 ) // If blur is not desired, clear the blur effect from the depth targets.
             else null
@@ -71,5 +85,9 @@ class LauncherDepthController(
         )
         launcher.depthBlurTargets.forEach { it.setRenderEffect(blurEffect) }
         return shouldBlurWorkspace
+    }
+
+    private companion object {
+        const val BLUR_STEP_DP = 8f
     }
 }
